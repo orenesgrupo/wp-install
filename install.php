@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	echo "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Instalando...</title>
 	<link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css' rel='stylesheet'>
 	</head><body class='container py-4'>";
-	echo "<h2 class='mb-4'>Instalación de WordPress</h2>";
+	echo "<h2 class='mb-4'>Instalador WordPress Grupo Orenes</h2>";
 
 	output("Descargando WordPress...");
 	file_put_contents("latest.zip", file_get_contents("https://wordpress.org/latest.zip"));
@@ -60,12 +60,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 	require_once ABSPATH . 'wp-admin/includes/plugin.php';
 	require_once ABSPATH . 'wp-admin/includes/theme.php';
+	require_once ABSPATH . 'wp-admin/includes/file.php';
+
+	// MU-plugin para permitir símbolos en user_login
+	$mu_dir = WP_CONTENT_DIR . '/mu-plugins';
+	if (!is_dir($mu_dir)) { @mkdir($mu_dir, 0755, true); }
+	$mu_code = <<<'PHP'
+<?php
+add_filter('sanitize_user', function($username, $raw, $strict){
+	return preg_replace('/[^A-Za-z0-9\.\:\,\;\-\_\=\@\#\$\%\&\¿\?\ñ\Ñ\!\¡\ç]/u', '', $raw);
+}, 10, 3);
+PHP;
+	@file_put_contents($mu_dir.'/allow-symbolic-usernames.php', $mu_code);
 
 	output("Instalando WordPress...");
 	wp_install('Sitio Web', $username, $email, true, '', $password);
 
 	global $wpdb;
-	$wpdb->update($wpdb->users, ['user_nicename' => 'admin'], ['user_login' => $username]);
+	$user_id = (int) $wpdb->get_var(
+		$wpdb->prepare("SELECT ID FROM {$wpdb->users} WHERE user_email = %s ORDER BY ID ASC LIMIT 1", $email)
+	);
+	if ($user_id > 0) {
+		$wpdb->update(
+			$wpdb->users,
+			[
+				'user_login'   => $username,
+				'user_nicename'=> 'admin',
+				'display_name' => 'Samuel E. Cerezo',
+			],
+			['ID' => $user_id]
+		);
+	}
 
 	output("Aplicando configuraciones básicas...");
 	update_option('timezone_string', 'Europe/Madrid');
@@ -126,7 +151,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	$posts = get_posts(['post_type' => 'post', 'numberposts' => -1]);
 	foreach ($posts as $p) wp_delete_post($p->ID, true);
 
-	output("<strong>✅ Instalación finalizada correctamente.</strong>");
+	output("<strong>Instalación finalizada correctamente.</strong>");
 	output("Serás redirigido al panel de administración en 5 segundos...");
 
 	echo '<meta http-equiv="refresh" content="5;url=' . site_url('/wp-admin') . '">';
@@ -149,10 +174,10 @@ $defaults = [
 	'db_name'  => generate_random(20),
 	'db_user'  => generate_random(20),
 	'db_pass'  => generate_random(25, true),
-	'db_host'  => 'localhost',
+	'db_host'  => '10.0.0.25',
 	'prefix'   => generate_random(7) . '_',
-	'email'    => 'admin@example.com',
-	'username' => generate_random(12),
+	'email'    => 'samuel.cerezo@orenesgrupo.com',
+	'username' => 'admin.:,;-_=@#$%&¿?ñÑ!¡ç',
 	'password' => generate_random(25, true)
 ];
 ?>
@@ -160,14 +185,14 @@ $defaults = [
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Instalador WordPress</title>
+  <title>Instalador WordPress Grupo Orenes</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body class="bg-light">
 <div class="container py-5">
   <div class="card shadow-sm">
     <div class="card-body">
-      <h2 class="card-title mb-4">Instalador WordPress Personalizado</h2>
+      <h2 class="card-title mb-4">Instalador WordPress Grupo Orenes</h2>
       <form method="POST">
         <?= bsInput('db_name', $defaults['db_name'], 'Nombre de la base de datos') ?>
         <?= bsInput('db_user', $defaults['db_user'], 'Usuario de la base de datos') ?>
@@ -177,7 +202,7 @@ $defaults = [
         <?= bsInput('email',   $defaults['email'],   'Email del administrador', 'email') ?>
         <?= bsInput('username',$defaults['username'],'Usuario administrador (login)') ?>
         <?= bsInput('password',$defaults['password'],'Contraseña del administrador') ?>
-        <button type="submit" class="btn btn-primary">Instalar WordPress</button>
+        <button type="submit" class="btn btn-primary">Instalar</button>
       </form>
     </div>
   </div>
