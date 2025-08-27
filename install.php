@@ -1,12 +1,5 @@
 <?php
-/* install-grupo-orenes.php
- * Instalador WordPress con Bootstrap.
- * - Email por defecto: samuel.cerezo@orenesgrupo.com
- * - Host BD por defecto: 10.0.0.25
- * - user_login admite símbolos tras instalación (actualización directa en DB)
- * - user_nicename = admin
- * - display_name  = "Samuel E. Cerezo"
- */
+/* install-grupo-orenes.php */
 
 function generate_random(int $length, bool $symbols = false): string {
 	$chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -29,14 +22,13 @@ function output_step(string $message): void {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-
 	$db_name  = $_POST['db_name'];
 	$db_user  = $_POST['db_user'];
 	$db_pass  = $_POST['db_pass'];
 	$db_host  = $_POST['db_host'];
 	$prefix   = $_POST['prefix'];
 	$email    = $_POST['email'];
-	$username = $_POST['username']; // con símbolos
+	$username = $_POST['username'];
 	$password = $_POST['password'];
 
 	echo "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Instalando...</title>
@@ -44,7 +36,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	</head><body class='container py-4'>";
 	echo "<h2 class='mb-4'>Instalador WordPress Grupo Orenes</h2>";
 
-	// 1) Descargar y desplegar WordPress
+	// Descargar WordPress
 	output_step("Descargando WordPress...");
 	file_put_contents("latest.zip", file_get_contents("https://wordpress.org/latest.zip"));
 	$zip = new ZipArchive;
@@ -56,14 +48,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	} else {
 		die("No se pudo descomprimir WordPress.");
 	}
-
 	foreach (scandir('wordpress') as $file) {
 		if ($file === '.' || $file === '..') continue;
 		rename("wordpress/$file", $file);
 	}
 	@rmdir('wordpress');
 
-	// 2) Configuración básica
+	// Configuración
 	output_step("Creando archivo wp-config.php...");
 	$cfg = file_get_contents("wp-config-sample.php");
 	$cfg = str_replace(
@@ -73,7 +64,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	);
 	file_put_contents("wp-config.php", $cfg);
 
-	// 3) Cargar WordPress
 	define('WP_INSTALLING', true);
 	require_once __DIR__ . '/wp-load.php';
 	require_once ABSPATH . 'wp-admin/includes/upgrade.php';
@@ -82,28 +72,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	require_once ABSPATH . 'wp-admin/includes/file.php';
 	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
 
-	// 4) MU-plugin para permitir símbolos en nombres de usuario en futuras operaciones y login
+	// MU-plugin para permitir símbolos
 	$mu_dir = WP_CONTENT_DIR . '/mu-plugins';
 	if (!is_dir($mu_dir)) { @mkdir($mu_dir, 0755, true); }
 	$mu_code = <<<'PHP'
 <?php
-/*
-Plugin Name: Allow Symbolic Usernames
-Description: Permite símbolos específicos en nombres de usuario y en el login.
-*/
 add_filter('sanitize_user', function($username, $raw, $strict){
-	// Permitidos: . : , ; - _ ç ñ Ñ ¡ ! @ # $ % & = ¿ ?
 	return preg_replace('/[^A-Za-z0-9\.\:\,\;\-\_\ç\ñ\Ñ\¡\!\@\#\$\%\&\=\¿\?]/u', '', $raw);
 }, 10, 3);
 PHP;
 	@file_put_contents($mu_dir.'/allow-symbolic-usernames.php', $mu_code);
 
-	// 5) Instalar WordPress con un login temporal seguro y luego sobreescribir en DB
+	// Instalar WP con login provisional
 	output_step("Instalando WordPress...");
-	$provisional_login = 'temporal_' . substr(md5(uniqid('', true)), 0, 8);
+	$provisional_login = 'temp_' . substr(md5(uniqid('', true)), 0, 6);
 	wp_install('Sitio Web', $provisional_login, $email, true, '', $password);
 
-	// 6) Forzar user_login con símbolos, nicename y display_name
+	// Sobreescribir usuario
 	global $wpdb;
 	$user_id = (int) $wpdb->get_var(
 		$wpdb->prepare("SELECT ID FROM {$wpdb->users} WHERE user_email = %s ORDER BY ID ASC LIMIT 1", $email)
@@ -112,7 +97,7 @@ PHP;
 		$wpdb->update(
 			$wpdb->users,
 			[
-				'user_login'   => $username,              // puede contener símbolos
+				'user_login'   => $username,
 				'user_nicename'=> 'admin',
 				'display_name' => 'Samuel E. Cerezo',
 			],
@@ -120,7 +105,7 @@ PHP;
 		);
 	}
 
-	// 7) Ajustes básicos
+	// Ajustes básicos
 	output_step("Aplicando configuraciones básicas...");
 	update_option('timezone_string', 'Europe/Madrid');
 	update_option('uploads_use_yearmonth_folders', 0);
@@ -132,7 +117,7 @@ PHP;
 	update_option('large_size_w', 1000);
 	update_option('large_size_h', 1000);
 
-	// 8) Tema
+	// Tema
 	output_step("Instalando tema personalizado...");
 	$theme_url = 'https://github.com/orenesgrupo/orenes/archive/refs/heads/main.zip';
 	$theme_zip = 'orenes.zip';
@@ -149,7 +134,7 @@ PHP;
 		}
 	}
 
-	// 9) Plugins gratuitos
+	// Plugins
 	output_step("Instalando plugins...");
 	$plugins = [
 		'elementor'        => 'https://downloads.wordpress.org/plugin/elementor.latest-stable.zip',
@@ -163,7 +148,7 @@ PHP;
 		activate_plugin("$slug/$slug.php");
 	}
 
-	// 10) Elementor ajustes
+	// Elementor ajustes
 	output_step("Configurando Elementor...");
 	update_option('elementor_disable_color_schemes', 'yes');
 	update_option('elementor_disable_typography_schemes', 'yes');
@@ -174,17 +159,16 @@ PHP;
 	update_option('elementor_use_google_fonts', 'no');
 	update_option('elementor_fonts_manager_font_display', 'swap');
 
-	// 11) Portada
+	// Página de inicio
 	output_step("Ajustando página de inicio...");
 	wp_update_post(['ID' => 2, 'post_title' => 'Inicio', 'post_name' => 'inicio']);
 	update_option('show_on_front', 'page');
 	update_option('page_on_front', 2);
 
-	// 12) Limpieza entradas
+	// Borrar posts
 	$posts = get_posts(['post_type' => 'post', 'numberposts' => -1]);
 	foreach ($posts as $p) wp_delete_post($p->ID, true);
 
-	// 13) Fin
 	output_step("<strong>Instalación finalizada correctamente.</strong>");
 	output_step("Serás redirigido al panel de administración en 5 segundos...");
 
@@ -196,12 +180,13 @@ PHP;
 	exit;
 }
 
-// ---------- Formulario (Bootstrap) ----------
+// ---------- Formulario ----------
 function bsInput(string $name, string $value, string $label, string $type='text'): string {
+	$val = htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 	return "
 	<div class='mb-3'>
 		<label class='form-label' for='$name'>$label</label>
-		<input type='$type' id='$name' name='$name' value=\"".htmlspecialchars($value, ENT_QUOTES)."\" required class='form-control'>
+		<input type='$type' id='$name' name='$name' value=\"$val\" required class='form-control'>
 	</div>";
 }
 
@@ -212,7 +197,7 @@ $defaults = [
 	'db_host'  => '10.0.0.25',
 	'prefix'   => generate_random(7) . '_',
 	'email'    => 'samuel.cerezo@orenesgrupo.com',
-	'username' => generate_random_username(20), // se aplicará tras la instalación
+	'username' => generate_random_username(20),
 	'password' => generate_random(25, true),
 ];
 ?>
@@ -228,15 +213,15 @@ $defaults = [
   <div class="card shadow-sm">
     <div class="card-body">
       <h2 class="card-title mb-4">Instalador WordPress Grupo Orenes</h2>
-      <form method="POST">
+      <form method="POST" accept-charset="UTF-8">
         <?= bsInput('db_name',  $defaults['db_name'],  'Nombre de la base de datos') ?>
         <?= bsInput('db_user',  $defaults['db_user'],  'Usuario de la base de datos') ?>
-        <?= bsInput('db_pass',  $defaults['db_pass'],  'Contraseña de la base de datos') ?>
+        <?= bsInput('db_pass',  $defaults['db_pass'],  'Contraseña de la base de datos', 'password') ?>
         <?= bsInput('db_host',  $defaults['db_host'],  'Host de la base de datos') ?>
         <?= bsInput('prefix',   $defaults['prefix'],   'Prefijo de tablas') ?>
         <?= bsInput('email',    $defaults['email'],    'Email del administrador', 'email') ?>
         <?= bsInput('username', $defaults['username'], 'Usuario administrador (login)') ?>
-        <?= bsInput('password', $defaults['password'], 'Contraseña del administrador') ?>
+        <?= bsInput('password', $defaults['password'], 'Contraseña del administrador', 'password') ?>
         <button type="submit" class="btn btn-primary">Instalar</button>
       </form>
     </div>
