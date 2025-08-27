@@ -1,41 +1,31 @@
 <?php
 function generate_random($length, $symbols = false) {
-
 	$chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-
 	if ($symbols) $chars .= '.:,;-_@?¿¡!"$%&=';
-
 	return substr(str_shuffle(str_repeat($chars, $length)), 0, $length);
-
 }
 
 function output($message) {
-
 	echo "<p>$message</p>";
-
 	@ob_flush();
-
 	@flush();
-
 	sleep(1);
-
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-
 	$db_name = $_POST['db_name'];
 	$db_user = $_POST['db_user'];
 	$db_pass = $_POST['db_pass'];
 	$db_host = $_POST['db_host'];
+	$prefix  = $_POST['prefix'];
+	$email   = $_POST['email'];
+	$username= $_POST['username'];
+	$password= $_POST['password'];
 
-	$prefix = $_POST['prefix'];
-
-	$email = $_POST['email'];
-	$username  = $_POST['username'];
-	$password  = $_POST['password'];
-
-	echo "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Instalando...</title></head><body style='font-family:sans-serif;'>";
-	echo "<h2>Instalación de WordPress</h2>";
+	echo "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Instalando...</title>
+	<link href='https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css' rel='stylesheet'>
+	</head><body class='container py-4'>";
+	echo "<h2 class='mb-4'>Instalación de WordPress</h2>";
 
 	output("Descargando WordPress...");
 	file_put_contents("latest.zip", file_get_contents("https://wordpress.org/latest.zip"));
@@ -137,48 +127,60 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	foreach ($posts as $p) wp_delete_post($p->ID, true);
 
 	output("<strong>✅ Instalación finalizada correctamente.</strong>");
-output("Serás redirigido al panel de administración en 5 segundos...");
+	output("Serás redirigido al panel de administración en 5 segundos...");
 
-echo '<meta http-equiv="refresh" content="5;url=' . site_url('/wp-admin') . '">';
-echo "<p style='color:gray;font-size:13px;'>Este instalador se autodestruirá automáticamente.</p>";
+	echo '<meta http-equiv="refresh" content="5;url=' . site_url('/wp-admin') . '">';
+	echo "<p class='text-muted small'>Este instalador se autodestruirá automáticamente.</p>";
 
-// Eliminar el instalador
-unlink(__FILE__);
-
-echo "</body></html>";
-exit;
+	unlink(__FILE__);
+	echo "</body></html>";
+	exit;
 }
 
-function htmlInput($name, $value, $label) {
-	return "<label><strong>$label</strong><br><input type='text' name='$name' value=\"$value\" required style='width:100%;margin-bottom:10px;'></label>";
+function bsInput($name, $value, $label, $type='text') {
+	return "
+	<div class='mb-3'>
+		<label class='form-label' for='$name'>$label</label>
+		<input type='$type' id='$name' name='$name' value=\"".htmlspecialchars($value, ENT_QUOTES)."\" required class='form-control'>
+	</div>";
 }
 
 $defaults = [
-	'db_name'     => generate_random(20),
-	'db_user'     => generate_random(20),
-	'db_pass'     => generate_random(25, true),
-	'db_host'     => 'localhost',
-	'prefix'      => generate_random(7) . '_',
-	'email'       => 'samuel.cerezo@orenesgrupo.com',
-	'username'  => generate_random(20, true),
-	'password'  => generate_random(25, true)
+	'db_name'  => generate_random(20),
+	'db_user'  => generate_random(20),
+	'db_pass'  => generate_random(25, true),
+	'db_host'  => 'localhost',
+	'prefix'   => generate_random(7) . '_',
+	'email'    => 'admin@example.com',
+	'username' => generate_random(12),
+	'password' => generate_random(25, true)
 ];
 ?>
 <!DOCTYPE html>
-<html>
-<head><meta charset="UTF-8"><title>Instalador WordPress</title></head>
-<body style="font-family:sans-serif;max-width:600px;margin:auto;">
-<h2>Instalador WordPress Personalizado</h2>
-<form method="POST">
-	<?= htmlInput('db_name', $defaults['db_name'], 'Nombre de la base de datos') ?>
-	<?= htmlInput('db_user', $defaults['db_user'], 'Usuario de la base de datos') ?>
-	<?= htmlInput('db_pass', $defaults['db_pass'], 'Contraseña de la base de datos') ?>
-	<?= htmlInput('db_host', $defaults['db_host'], 'Host de la base de datos') ?>
-	<?= htmlInput('prefix',  $defaults['prefix'],  'Prefijo de tablas') ?>
-	<?= htmlInput('email',   $defaults['email'],   'Email del administrador') ?>
-	<?= htmlInput('username', $defaults['username'], 'Usuario administrador (login)') ?>
-	<?= htmlInput('password', $defaults['password'], 'Contraseña del administrador') ?>
-	<input type="submit" value="Instalar WordPress" style="padding:10px 20px;margin-top:10px;">
-</form>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Instalador WordPress</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-light">
+<div class="container py-5">
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <h2 class="card-title mb-4">Instalador WordPress Personalizado</h2>
+      <form method="POST">
+        <?= bsInput('db_name', $defaults['db_name'], 'Nombre de la base de datos') ?>
+        <?= bsInput('db_user', $defaults['db_user'], 'Usuario de la base de datos') ?>
+        <?= bsInput('db_pass', $defaults['db_pass'], 'Contraseña de la base de datos') ?>
+        <?= bsInput('db_host', $defaults['db_host'], 'Host de la base de datos') ?>
+        <?= bsInput('prefix',  $defaults['prefix'],  'Prefijo de tablas') ?>
+        <?= bsInput('email',   $defaults['email'],   'Email del administrador', 'email') ?>
+        <?= bsInput('username',$defaults['username'],'Usuario administrador (login)') ?>
+        <?= bsInput('password',$defaults['password'],'Contraseña del administrador') ?>
+        <button type="submit" class="btn btn-primary">Instalar WordPress</button>
+      </form>
+    </div>
+  </div>
+</div>
 </body>
 </html>
