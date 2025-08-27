@@ -1,18 +1,30 @@
 <?php
 /* install-grupo-orenes.php */
 
-function generate_random(int $length, bool $symbols = false): string {
-	$chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-	if ($symbols) $chars .= '.:,;-_@?¿¡!"$%&=';
-	return substr(str_shuffle(str_repeat($chars, $length)), 0, $length);
-}
+header('Content-Type: text/html; charset=UTF-8');
 
-function generate_random_username(int $length = 20): string {
-	$chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.:,;-_çñÑ¡!@#$%&=¿?';
+function random_ascii(int $length, string $chars): string {
 	$out = '';
 	$max = strlen($chars) - 1;
 	for ($i = 0; $i < $length; $i++) $out .= $chars[random_int(0, $max)];
 	return $out;
+}
+
+function generate_random(int $length, bool $symbols = false): string {
+	$base = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+	if ($symbols) {
+		// ASCII seguros en atributos + signos españoles via entidades para evitar problemas de guardado del archivo
+		$ascii = '.,:;-_@#$%&=!?';
+		$span  = html_entity_decode('&ccedil;&ntilde;&Ntilde;&iexcl;&iquest;', ENT_QUOTES, 'UTF-8'); // ç ñ Ñ ¡ ¿
+		$base .= $ascii . $span;
+	}
+	return random_ascii($length, $base);
+}
+
+function generate_random_username(int $length = 20): string {
+	$chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,:;-_@#$%&=!?'
+		. html_entity_decode('&ccedil;&ntilde;&Ntilde;&iexcl;&iquest;', ENT_QUOTES, 'UTF-8');
+	return random_ascii($length, $chars);
 }
 
 function output_step(string $message): void {
@@ -28,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	$db_host  = $_POST['db_host'];
 	$prefix   = $_POST['prefix'];
 	$email    = $_POST['email'];
-	$username = $_POST['username'];
+	$username = $_POST['username']; // con símbolos
 	$password = $_POST['password'];
 
 	echo "<!DOCTYPE html><html><head><meta charset='UTF-8'><title>Instalando...</title>
@@ -36,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	</head><body class='container py-4'>";
 	echo "<h2 class='mb-4'>Instalador WordPress Grupo Orenes</h2>";
 
-	// Descargar WordPress
+	// Descargar WP
 	output_step("Descargando WordPress...");
 	file_put_contents("latest.zip", file_get_contents("https://wordpress.org/latest.zip"));
 	$zip = new ZipArchive;
@@ -54,7 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	}
 	@rmdir('wordpress');
 
-	// Configuración
+	// wp-config
 	output_step("Creando archivo wp-config.php...");
 	$cfg = file_get_contents("wp-config-sample.php");
 	$cfg = str_replace(
@@ -72,23 +84,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	require_once ABSPATH . 'wp-admin/includes/file.php';
 	require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
 
-	// MU-plugin para permitir símbolos
+	// MU-plugin para permitir símbolos en login/autenticación (regex en UTF-8)
 	$mu_dir = WP_CONTENT_DIR . '/mu-plugins';
 	if (!is_dir($mu_dir)) { @mkdir($mu_dir, 0755, true); }
 	$mu_code = <<<'PHP'
 <?php
 add_filter('sanitize_user', function($username, $raw, $strict){
-	return preg_replace('/[^A-Za-z0-9\.\:\,\;\-\_\ç\ñ\Ñ\¡\!\@\#\$\%\&\=\¿\?]/u', '', $raw);
+	// Permitidos: A-Za-z0-9 . : , ; - _ ç ñ Ñ ¡ ! @ # $ % & = ¿ ?
+	return preg_replace('/[^A-Za-z0-9\.\:\,\;\-\_\x{00E7}\x{00F1}\x{00D1}\x{00A1}\!\@\#\$\%\&\=\x{00BF}\?]/u', '', $raw);
 }, 10, 3);
 PHP;
 	@file_put_contents($mu_dir.'/allow-symbolic-usernames.php', $mu_code);
 
-	// Instalar WP con login provisional
+	// Instalar con login provisional
 	output_step("Instalando WordPress...");
 	$provisional_login = 'temp_' . substr(md5(uniqid('', true)), 0, 6);
 	wp_install('Sitio Web', $provisional_login, $email, true, '', $password);
 
-	// Sobreescribir usuario
+	// Forzar user_login + nicename + display_name
 	global $wpdb;
 	$user_id = (int) $wpdb->get_var(
 		$wpdb->prepare("SELECT ID FROM {$wpdb->users} WHERE user_email = %s ORDER BY ID ASC LIMIT 1", $email)
@@ -105,7 +118,7 @@ PHP;
 		);
 	}
 
-	// Ajustes básicos
+	// Ajustes
 	output_step("Aplicando configuraciones básicas...");
 	update_option('timezone_string', 'Europe/Madrid');
 	update_option('uploads_use_yearmonth_folders', 0);
@@ -159,13 +172,12 @@ PHP;
 	update_option('elementor_use_google_fonts', 'no');
 	update_option('elementor_fonts_manager_font_display', 'swap');
 
-	// Página de inicio
+	// Portada y limpieza
 	output_step("Ajustando página de inicio...");
 	wp_update_post(['ID' => 2, 'post_title' => 'Inicio', 'post_name' => 'inicio']);
 	update_option('show_on_front', 'page');
 	update_option('page_on_front', 2);
 
-	// Borrar posts
 	$posts = get_posts(['post_type' => 'post', 'numberposts' => -1]);
 	foreach ($posts as $p) wp_delete_post($p->ID, true);
 
@@ -193,12 +205,12 @@ function bsInput(string $name, string $value, string $label, string $type='text'
 $defaults = [
 	'db_name'  => generate_random(20),
 	'db_user'  => generate_random(20),
-	'db_pass'  => generate_random(25, true),
+	'db_pass'  => generate_random(25, true),   // visible como texto
 	'db_host'  => '10.0.0.25',
 	'prefix'   => generate_random(7) . '_',
 	'email'    => 'samuel.cerezo@orenesgrupo.com',
 	'username' => generate_random_username(20),
-	'password' => generate_random(25, true),
+	'password' => generate_random(25, true),   // visible como texto
 ];
 ?>
 <!DOCTYPE html>
@@ -216,12 +228,12 @@ $defaults = [
       <form method="POST" accept-charset="UTF-8">
         <?= bsInput('db_name',  $defaults['db_name'],  'Nombre de la base de datos') ?>
         <?= bsInput('db_user',  $defaults['db_user'],  'Usuario de la base de datos') ?>
-        <?= bsInput('db_pass',  $defaults['db_pass'],  'Contraseña de la base de datos', 'password') ?>
+        <?= bsInput('db_pass',  $defaults['db_pass'],  'Contraseña de la base de datos', 'text') ?>
         <?= bsInput('db_host',  $defaults['db_host'],  'Host de la base de datos') ?>
         <?= bsInput('prefix',   $defaults['prefix'],   'Prefijo de tablas') ?>
         <?= bsInput('email',    $defaults['email'],    'Email del administrador', 'email') ?>
         <?= bsInput('username', $defaults['username'], 'Usuario administrador (login)') ?>
-        <?= bsInput('password', $defaults['password'], 'Contraseña del administrador', 'password') ?>
+        <?= bsInput('password', $defaults['password'], 'Contraseña del administrador', 'text') ?>
         <button type="submit" class="btn btn-primary">Instalar</button>
       </form>
     </div>
